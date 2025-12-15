@@ -1,0 +1,17 @@
+# IDEs
+.idea
+.vscode
+
+# Python
+__pycache__
+.venv/
+
+# Project related
+.env
+
+# Other
+data
+uploads
+*.log
+.pdf
+.docx
