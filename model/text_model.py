@@ -181,6 +181,7 @@ training_args = TrainingArguments(
     greater_is_better=True
 )
 
+
 # Создаем тренер
 trainer = Trainer(
     model=model,

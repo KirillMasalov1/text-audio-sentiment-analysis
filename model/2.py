@@ -13,7 +13,7 @@ from sklearn.metrics import precision_recall_fscore_support
 
 warnings.filterwarnings('ignore')
 
-need_to_train = False
+need_to_train = True
 
 
 # ==================== 1. КОНФИГУРАЦИЯ ====================
@@ -27,7 +27,7 @@ class Config:
     # Параметры
     BATCH_SIZE = 8
     LEARNING_RATE = 3e-5
-    EPOCHS = 20
+    EPOCHS = 10
     MAX_LENGTH = 128
     TEST_SIZE = 0.2
     SEED = 34
