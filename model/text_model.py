@@ -1,8 +1,9 @@
 
 import numpy as np
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
-from transformers import Trainer, TrainingArguments
+from transformers import AutoModel, Trainer, TrainingArguments
 import torch
+import torch.nn as nn
 from transformers import pipeline
 from datasets import Dataset
 from datasets import load_dataset
@@ -10,42 +11,86 @@ import pandas as pd
 from sklearn.metrics import accuracy_score, f1_score
 import warnings
 warnings.filterwarnings('ignore')
-import kagglehub
 
-# Download latest version
-# path = kagglehub.dataset_download("mar1mba/russian-sentiment-dataset")
-# path = "C:\\Users\\Admin\\.cache\\kagglehub\\datasets\\mar1mba\\russian-sentiment-dataset\\versions\\2"
-# path2 = "C:\\Users\\Admin\\.cache\\kagglehub\\datasets\\mar1mba\\russian-sentiment-dataset\\versions\\2"
-# df = pd.read_csv(path)
-
-# url = "hf://datasets/seara/ru_go_emotions/raw/train-00000-of-00001-86de8ef1d0ae28df.parquet"
-# save_path = "Документы"
-# df = pd.read_parquet(url)
-# df.to_csv(save_path, index=False, encoding='utf-8')
-# print(df.head(100))
 
 # ==================== 1. ЗАГРУЗКА И ПОДГОТОВКА ДАННЫХ ====================
 
 # Пример данных для обучения (замените на свои)
-data = {
-    'text': [
-        "Отличный товар, всем рекомендую!",
-        "Ужасное качество, не покупайте",
-        "Нормально, но могло быть лучше",
-        "Просто супер, я в восторге!",
-        "Разочарован, не оправдало ожиданий",
-        "Хороший продукт за свои деньги",
-        "Кошелёк просто ужасен",
-        "Лучшая покупка за последнее время",
-        "Не советую, полный развод",
-        "Качество на высоте, доволен"
-    ],
-    'label': [1, 0, 0, 1, 0, 1, 0, 1, 0, 1]  # 1 = позитив, 0 = негатив
-}
+# data = {
+#     'text': [
+#         "Отличный товар, всем рекомендую!",
+#         "Ужасное качество, не покупайте",
+#         "Нормально, но могло быть лучше",
+#         "Просто супер, я в восторге!",
+#         "Разочарован, не оправдало ожиданий",
+#         "Хороший продукт за свои деньги",
+#         "Кошелёк просто ужасен",
+#         "Лучшая покупка за последнее время",
+#         "Не советую, полный развод",
+#         "Качество на высоте, доволен"
+#     ],
+#     'label': [1, 0, 0, 1, 0, 1, 0, 1, 0, 1]  # 1 = позитив, 0 = негатив
+# }
 
-# Создаем DataFrame и Dataset
-df = pd.DataFrame(data)
+# data = {
+#     'text': [
+#         # РАДОСТЬ (0) - 10 примеров
+#         "Я так счастлив сегодня!", "Ура, получилось!", "Воодушевлен результатами",
+#         "Я невероятно рад!", "Это прекрасная новость!", "Я в восторге!",
+#         "Какой замечательный день!", "Мне очень весело!", "Я чувствую себя прекрасно!",
+#         "Это просто потрясающе!",
+#
+#         # ГРУСТЬ (1) - 10 примеров
+#         "Мне очень грустно сегодня", "Разочарован полностью", "Я в отчаянии",
+#         "Это печально", "Мне тоскливо", "Чувствую себя несчастным",
+#         "Всё плохо", "Нет больше сил", "Жизнь не удалась",
+#         "Так грустно и одиноко",
+#
+#         # НЕЙТРАЛЬНО (2) - 10 примеров
+#         "Нормальный день, ничего особенного", "Спокойный вечер", "Всё как обычно",
+#         "Ничего не происходит", "Обычный день", "Всё нормально",
+#         "Ничего нового", "Без изменений", "Всё стабильно",
+#         "Ничего примечательного",
+#
+#         # ГНЕВ (3) - 10 примеров
+#         "Безумно зол на эту ситуацию", "Меня это раздражает", "Это меня бесит!",
+#         "Я в ярости!", "Меня это злит", "Не могу больше терпеть!",
+#         "Как это достало!", "Я взбешён!", "Это невыносимо!",
+#         "Моё терпение лопнуло!",
+#
+#         # СТРАХ (4) - 10 примеров
+#         "Чувствую легкую тревогу", "Мне страшно", "Чувствую тревогу и беспокойство",
+#         "Я боюсь этого", "Мне очень страшно", "Тревожное состояние",
+#         "Паника нарастает", "Ощущаю страх", "Не по себе",
+#         "Чувство беспокойства не покидает"
+#     ],
+#     'label': (
+#             [0] * 10 +  # 10 радость
+#             [1] * 10 +  # 10 грусть
+#             [2] * 10 +  # 10 нейтрально
+#             [3] * 10 +  # 10 гнев
+#             [4] * 10  # 10 страх
+#     )
+# }
+
+emotions = ['admiration', 'amusement', 'anger', 'annoyance','approval','caring','confusion','curiosity',
+            'desire','disappointment','disapproval','disgust','embarrassment','excitement','fear','gratitude',
+            'grief','joy','love','nervousness','optimism','pride','realization','relief','remorse','sadness',
+            'surprise','neutral']
+
+df = pd.read_csv("Датасет", encoding='utf-8')
+df['text'] = df['ru_text']
+df['labels'] = df[emotions].values.tolist()
+
+# Оставляем только нужные колонки
+df = df[['text', 'labels']]
+
+
 dataset = Dataset.from_pandas(df)
+num_classes = len(emotions)
+
+id2label = {i: emotion for i, emotion in enumerate(emotions)}
+
 
 # Разделяем на train и validation
 dataset = dataset.train_test_split(test_size=0.2, seed=42)
@@ -69,12 +114,16 @@ if tokenizer.pad_token is None:
 
 # Функция для токенизации
 def tokenize_function(examples):
-    return tokenizer(
+    tokenized = tokenizer(
         examples['text'],
         padding=True,
         truncation=True, # Обрезает длинные сообщения до 128 токенов, если такие есть
-        max_length=128
+        max_length=128,
+        return_tensors=None
     )
+
+    tokenized['labels'] = examples['labels']
+    return tokenized
 
 
 # Токенизируем данные
@@ -82,11 +131,14 @@ print("Токенизация данных...")
 train_dataset = train_dataset.map(tokenize_function, batched=True)
 val_dataset = val_dataset.map(tokenize_function, batched=True)
 
+train_dataset.set_format(type='torch', columns=['input_ids', 'attention_mask', 'labels'])
+val_dataset.set_format(type='torch', columns=['input_ids', 'attention_mask', 'labels'])
+
 # Загружаем модель для классификации
 print("Загрузка модели...")
 model = AutoModelForSequenceClassification.from_pretrained(
     model_name,
-    num_labels=2,  # бинарная классификация
+    num_labels=num_classes,  # бинарная классификация
     ignore_mismatched_sizes=True
 )
 
@@ -96,7 +148,6 @@ model = AutoModelForSequenceClassification.from_pretrained(
 # Функция для вычисления метрик
 def compute_metrics(pred):
     labels = pred.label_ids
-    print("!!!!!!!!!!!!!!!!!!!!!!!!", labels)
     preds = pred.predictions.argmax(-1)
 
     acc = accuracy_score(labels, preds)
@@ -115,7 +166,7 @@ training_args = TrainingArguments(
     learning_rate=2e-5,  # скорость обучения
     per_device_train_batch_size=4,  # уменьшено для экономии памяти
     per_device_eval_batch_size=4,
-    num_train_epochs=300,  # количество эпох
+    num_train_epochs=50,  # количество эпох
     weight_decay=0.01,  # регуляризация
     save_strategy="epoch",  # сохранять каждую эпоху
     load_best_model_at_end=True,  # загружать лучшую модель
@@ -124,7 +175,7 @@ training_args = TrainingArguments(
     report_to="none",  # не отправлять в wandb/tensorboard
     fp16=False,  # отключить смешанную точность если нет GPU
     gradient_accumulation_steps=1,
-    warmup_steps=100,
+    warmup_steps=10,
     save_total_limit=2,
     metric_for_best_model='accuracy',
     greater_is_better=True
@@ -215,9 +266,11 @@ try:
     # ==================== 7. ТЕСТИРОВАНИЕ ====================
 
     test_texts = [
-        "Это просто великолепно!",
-        "Ужасный сервис, больше не вернусь",
-        "Нормально, но есть недостатки"
+        "Я безумно рад и благодарен за эту победу!",  # joy + gratitude
+        "Мне страшно и грустно одновременно",  # fear + sadness
+        "Это раздражает и злит меня до безумия!",  # annoyance + anger
+        "Чувствую любовь и восхищение",  # love + admiration
+        "Нейтральное сообщение без эмоций"  # neutral
     ]
 
     print("\n" + "=" * 50)
@@ -227,16 +280,21 @@ try:
     for text in test_texts:
         try:
             result = classifier(text)[0]
-            # Определяем метку в читаемом формате
+
+            # ИЗМЕНЕНО: Новый способ определения метки
             if 'LABEL' in str(result['label']):
+                # Извлекаем номер метки
                 label_num = int(result['label'].replace('LABEL_', ''))
-                label = "ПОЗИТИВ" if label_num == 1 else "НЕГАТИВ"
+                # Используем наш mapping
+                label_name = id2label.get(label_num, f"Класс {label_num}")
             else:
-                label = result['label']
+                label_name = result['label']
 
             print(f"Текст: '{text}'")
-            print(f"  → {label} (уверенность: {result['score']:.2%})")
+            print(f"  → {label_name} (уверенность: {result['score']:.2%})")
+            print(f"  Номер класса: {label_num}")
             print()
+
         except Exception as e:
             print(f"Ошибка при предсказании для текста '{text}': {e}")
 
@@ -247,31 +305,23 @@ except Exception as e:
     print("\nАльтернативный способ предсказаний:")
     model.eval()
 
-    test_texts = ["Это тестовый текст для проверки"]
+    test_texts = ["Я так рад!", "Мне грустно", "Я зол"]
+
     for text in test_texts:
         inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=128)
 
         with torch.no_grad():
             outputs = model(**inputs)
             predictions = torch.nn.functional.softmax(outputs.logits, dim=-1)
+            predicted_class = predictions.argmax().item()
+            confidence = predictions.max().item()
 
+        label_name = id2label.get(predicted_class, f"Класс {predicted_class}")
         print(f"Текст: '{text}'")
-        print(f"Вероятности: {predictions[0].tolist()}")
-        print(f"Предсказанный класс: {predictions[0].argmax().item()}")
+        print(f"  → {label_name} (уверенность: {confidence:.2%})")
+        print(f"  Все вероятности: {[f'{p:.3f}' for p in predictions[0].tolist()]}")
+        print()
 
 print("\n" + "=" * 50)
 print("Скрипт завершен!")
 print("=" * 50)
-
-
-# # Пример использования
-# new_texts = [
-#     "Я в полном восторге от этого продукта!",
-#     "Качество оставляет желать лучшего",
-#     "Стоит своих денег, рекомендую"
-# ]
-#
-# print("Предсказания для новых текстов:")
-# predictions = predict_sentiment(new_texts)
-# for pred in predictions:
-#     print(f"'{pred['text'][:30]}...' → {pred['sentiment']} ({pred['confidence']:.1%})")
